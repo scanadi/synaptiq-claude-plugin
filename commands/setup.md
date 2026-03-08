@@ -1,18 +1,13 @@
 ---
-name: setup
 description: Install Synaptiq, index the codebase, and verify the MCP connection is working.
 argument-hint: "[--force]"
-allowed-tools:
-  - Bash
-  - Read
+allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh:*)", "Bash(synaptiq:*)"]
 ---
 
-Run the Synaptiq setup script to ensure everything is configured and working.
+Execute the setup script:
 
-Execute this command:
-
-```bash
-bash "$CLAUDE_PLUGIN_ROOT/scripts/setup.sh"
+```!
+"${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 ```
 
 After the script completes:
