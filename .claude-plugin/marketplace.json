@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "synaptiq-claude-plugin",
+  "version": "1.0.0",
+  "description": "Code intelligence plugin — indexes codebases into a knowledge graph for structural code discovery, impact analysis, and dead code detection.",
+  "owner": {
+    "name": "scanadi"
+  },
+  "plugins": [
+    {
+      "name": "synaptiq",
+      "description": "Code intelligence plugin — indexes codebases into a knowledge graph via Synaptiq MCP tools for structural code discovery, impact analysis, and dead code detection.",
+      "version": "0.1.0",
+      "author": {
+        "name": "scanadi"
+      },
+      "source": "./",
+      "category": "development",
+      "homepage": "https://github.com/scanadi/synaptiq-claude-plugin",
+      "keywords": ["code-intelligence", "knowledge-graph", "synaptiq", "mcp", "code-analysis"]
+    }
+  ]
+}
