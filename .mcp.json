@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "synaptiq": {
+      "command": "synaptiq",
+      "args": ["serve", "--watch"]
+    }
+  }
+}

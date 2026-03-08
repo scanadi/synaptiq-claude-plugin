@@ -1,0 +1,12 @@
+{
+  "name": "synaptiq",
+  "version": "0.1.0",
+  "description": "Code intelligence plugin — indexes codebases into a knowledge graph via Synaptiq MCP tools for structural code discovery, impact analysis, and dead code detection.",
+  "author": {
+    "name": "scanadi",
+    "url": "https://github.com/scanadi"
+  },
+  "repository": "https://github.com/scanadi/synaptiq-claude-plugin",
+  "license": "MIT",
+  "keywords": ["code-intelligence", "knowledge-graph", "synaptiq", "mcp", "code-analysis"]
+}
