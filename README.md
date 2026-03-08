@@ -31,6 +31,16 @@ git clone https://github.com/scanadi/synaptiq-claude-plugin.git
 claude --plugin-dir ./synaptiq-claude-plugin
 ```
 
+### Updating
+
+Update the marketplace, then reinstall the plugin:
+
+```bash
+claude plugin marketplace update synaptiq-claude-plugin
+claude plugin uninstall synaptiq
+claude plugin install synaptiq
+```
+
 ### Setup
 
 After installing, run the setup command in Claude Code:
