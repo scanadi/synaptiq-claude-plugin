@@ -67,17 +67,34 @@ else
 fi
 
 # Step 3: Index the codebase
+# Check if synaptiq server is already running (started by MCP)
+SYNAPTIQ_RUNNING=false
+if synaptiq status 2>&1 | grep -q "PID\|running" || pgrep -f "synaptiq serve" &>/dev/null; then
+  SYNAPTIQ_RUNNING=true
+fi
+
 step "Checking for existing index..."
 if [[ -d ".synaptiq" ]]; then
   ok "Index found at .synaptiq/"
-  echo "  Running incremental update..."
-  synaptiq analyze .
+  if [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
+    ok "MCP server is running with --watch (auto-reindexing enabled, skipping manual index)"
+  else
+    echo "  Running incremental update..."
+    synaptiq analyze .
+  fi
 else
-  step "No index found. Running initial analysis (this may take a minute)..."
-  synaptiq analyze .
+  if [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
+    ok "MCP server is running — it will index the codebase automatically"
+    # Wait briefly for initial index
+    echo "  Waiting for initial index..."
+    sleep 3
+  else
+    step "No index found. Running initial analysis (this may take a minute)..."
+    synaptiq analyze .
+  fi
 fi
 
-if [[ -d ".synaptiq" ]]; then
+if [[ -d ".synaptiq" ]] || [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
   ok "Codebase indexed successfully."
 else
   fail "Indexing failed. Check synaptiq output above."
@@ -86,7 +103,7 @@ fi
 
 # Step 4: Show index stats
 step "Index status:"
-synaptiq status 2>/dev/null || true
+synaptiq status 2>/dev/null || synaptiq list 2>/dev/null || true
 
 # Step 5: Check .gitignore
 step "Checking .gitignore..."
