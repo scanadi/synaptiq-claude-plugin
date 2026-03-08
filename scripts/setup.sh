@@ -14,6 +14,11 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[x]${NC} $1"; }
 ok()   { echo -e "${GREEN}[ok]${NC} $1"; }
 
+FORCE=false
+for arg in "$@"; do
+  [[ "$arg" == "--force" ]] && FORCE=true
+done
+
 echo "=== Synaptiq Setup ==="
 
 # Step 1: Check if synaptiq is installed
@@ -66,46 +71,56 @@ else
   warn "Could not detect Python version."
 fi
 
-# Step 3: Index the codebase
-# Check if synaptiq server is already running (started by MCP)
-SYNAPTIQ_RUNNING=false
-if synaptiq status 2>&1 | grep -q "PID\|running" || pgrep -f "synaptiq serve" &>/dev/null; then
-  SYNAPTIQ_RUNNING=true
+# Step 3: Check if synaptiq server is already running (started by MCP)
+SERVER_PID=""
+if pgrep -f "synaptiq serve" &>/dev/null; then
+  SERVER_PID=$(pgrep -f "synaptiq serve" | head -1)
 fi
 
-step "Checking for existing index..."
-if [[ -d ".synaptiq" ]]; then
+# Step 4: Index the codebase
+if [[ "$FORCE" == "true" ]]; then
+  step "Force rebuild requested — running full reindex..."
+  if [[ -n "$SERVER_PID" ]]; then
+    warn "Stopping MCP server (PID $SERVER_PID) to release DB lock..."
+    kill "$SERVER_PID" 2>/dev/null || true
+    sleep 1
+  fi
+  synaptiq analyze . --full
+  ok "Full reindex complete."
+  if [[ -n "$SERVER_PID" ]]; then
+    ok "MCP server will restart automatically on next tool call."
+  fi
+elif [[ -d ".synaptiq" ]]; then
+  step "Checking for existing index..."
   ok "Index found at .synaptiq/"
-  if [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
-    ok "MCP server is running with --watch (auto-reindexing enabled, skipping manual index)"
+  if [[ -n "$SERVER_PID" ]]; then
+    ok "MCP server is running with --watch (auto-reindexing enabled)"
   else
     echo "  Running incremental update..."
     synaptiq analyze .
   fi
 else
-  if [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
-    ok "MCP server is running — it will index the codebase automatically"
-    # Wait briefly for initial index
-    echo "  Waiting for initial index..."
-    sleep 3
-  else
-    step "No index found. Running initial analysis (this may take a minute)..."
-    synaptiq analyze .
+  step "No index found. Running initial analysis (this may take a minute)..."
+  if [[ -n "$SERVER_PID" ]]; then
+    warn "Stopping MCP server to run initial index..."
+    kill "$SERVER_PID" 2>/dev/null || true
+    sleep 1
   fi
+  synaptiq analyze .
 fi
 
-if [[ -d ".synaptiq" ]] || [[ "$SYNAPTIQ_RUNNING" == "true" ]]; then
+if [[ -d ".synaptiq" ]]; then
   ok "Codebase indexed successfully."
 else
   fail "Indexing failed. Check synaptiq output above."
   exit 1
 fi
 
-# Step 4: Show index stats
+# Step 5: Show index stats
 step "Index status:"
 synaptiq status 2>/dev/null || synaptiq list 2>/dev/null || true
 
-# Step 5: Check .gitignore
+# Step 6: Check .gitignore
 step "Checking .gitignore..."
 if [[ -f ".gitignore" ]]; then
   if grep -qF ".synaptiq" .gitignore 2>/dev/null; then
