@@ -1,0 +1,9 @@
+{
+  "name": "synaptiq-claude-plugin",
+  "plugins": [
+    {
+      "name": "synaptiq",
+      "path": "."
+    }
+  ]
+}

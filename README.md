@@ -13,11 +13,27 @@ One-step code intelligence integration for Claude Code. Install this plugin and 
 
 ## Installation
 
+### Option 1: Marketplace Install (Recommended)
+
+Register the marketplace and install the plugin:
+
 ```bash
-claude plugins add scanadi/synaptiq-claude-plugin
+claude plugin marketplace add https://github.com/scanadi/synaptiq-claude-plugin
+claude plugin install synaptiq
 ```
 
-Then run the setup command in Claude Code:
+### Option 2: Load Directly (Single Session)
+
+Clone the repo and load the plugin for a single session:
+
+```bash
+git clone https://github.com/scanadi/synaptiq-claude-plugin.git
+claude --plugin-dir ./synaptiq-claude-plugin
+```
+
+### Setup
+
+After installing, run the setup command in Claude Code:
 
 ```
 /synaptiq:setup
