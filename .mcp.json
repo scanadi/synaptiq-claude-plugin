@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "synaptiq": {
-      "command": "synaptiq",
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/serve.sh",
       "args": ["serve", "--watch", "--path", "$CLAUDE_PROJECT_DIR"]
     }
   }
