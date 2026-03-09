@@ -2,7 +2,7 @@
   "mcpServers": {
     "synaptiq": {
       "command": "synaptiq",
-      "args": ["serve", "--watch"]
+      "args": ["serve", "--watch", "--path", "$CLAUDE_PROJECT_DIR"]
     }
   }
 }
