@@ -61,7 +61,7 @@ This will:
 - **Python 3.11+**
 - **Claude Code** with plugin support
 - One of: `uv` (recommended) or `pip`
-- **Synaptiq >= 1.0.0** — `/synaptiq:setup` installs or upgrades it automatically
+- **Synaptiq >= 1.2.1** — `/synaptiq:setup` installs or upgrades it automatically
 
 ## Usage
 
@@ -107,6 +107,8 @@ Once installed, Claude will automatically:
 ## How It Works
 
 Synaptiq indexes your codebase using tree-sitter AST parsing into a KuzuDB knowledge graph. Every function, class, import, call, and type reference becomes a queryable node or edge. The MCP server exposes this graph to Claude Code.
+
+The server runs under a strict resource profile (capped engine threads, 512 MB buffer pool, capped embedding threads) so it stays polite beside your real work even with many agents querying concurrently. Tune via `SYNAPTIQ_KUZU_THREADS`, `SYNAPTIQ_KUZU_MEMORY_MB`, and `SYNAPTIQ_EMBED_THREADS` if needed.
 
 The plugin's session hook ensures Claude reaches for Synaptiq first when asked structural questions, rather than grepping through files. The skill provides Claude with the full tool reference, Cypher query patterns, and troubleshooting guidance.
 

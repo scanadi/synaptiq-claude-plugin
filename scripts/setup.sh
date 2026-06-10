@@ -22,10 +22,11 @@ done
 
 echo "=== Synaptiq Setup ==="
 
-# Minimum synaptiq version this plugin is written against. The skill
-# documents tools (coupling, communities, explain, review_risk, export, ...)
-# that only work correctly from 1.0.0 onward.
-MIN_VERSION="1.0.0"
+# Minimum synaptiq version this plugin is written against. 1.2.1 adds
+# role-aware resource profiles: the serve daemon caps its Kuzu scheduler
+# threads, buffer pool, and embedding threads instead of consuming every
+# core under concurrent agent load.
+MIN_VERSION="1.2.1"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
