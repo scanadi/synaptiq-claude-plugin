@@ -1,9 +1,14 @@
 ---
 name: synaptiq
-description: MUST consult this skill before using any Synaptiq MCP tool (synaptiq_query, synaptiq_context, synaptiq_impact, synaptiq_dead_code, synaptiq_detect_changes, synaptiq_cypher, synaptiq_list_repos) or MCP resource (synaptiq://overview, synaptiq://dead-code, synaptiq://schema). Contains the knowledge graph schema, Cypher query patterns, tool parameters, output formats, and investigation workflows needed to use Synaptiq effectively. Use whenever investigating code structure, call graphs, blast radius, dead code, file coupling, refactoring impact, cross-package dependencies, or architectural boundaries. Triggers on "what calls this", "what breaks if I change", "show dependencies", "find dead code", "blast radius", "which files change together", "trace the flow", "how is X connected", "who uses this function", "show callers", "show callees", "impact analysis", "is this code used", "structural diff", "cross-package imports", or any structural codebase question that goes beyond simple grep/glob. Also use when writing custom Cypher queries against the code graph.
+description: MUST consult this skill before using any Synaptiq MCP tool (synaptiq_query, synaptiq_context, synaptiq_impact, synaptiq_dead_code, synaptiq_detect_changes, synaptiq_coupling, synaptiq_call_path, synaptiq_communities, synaptiq_explain, synaptiq_review_risk, synaptiq_file_context, synaptiq_cycles, synaptiq_test_impact, synaptiq_export, synaptiq_suggest, synaptiq_remember, synaptiq_recall, synaptiq_forget, synaptiq_cypher, synaptiq_list_repos) or MCP resource (synaptiq://overview, synaptiq://dead-code, synaptiq://schema). Contains the knowledge graph schema, Cypher query patterns, tool parameters, output formats, and investigation workflows needed to use Synaptiq effectively. Use whenever investigating code structure, call graphs, blast radius, dead code, file coupling, refactoring impact, cross-package dependencies, or architectural boundaries. Triggers on "what calls this", "what breaks if I change", "show dependencies", "find dead code", "blast radius", "which files change together", "trace the flow", "how is X connected", "who uses this function", "show callers", "show callees", "impact analysis", "is this code used", "structural diff", "cross-package imports", "circular dependencies", "PR risk", "which tests are affected", or any structural codebase question that goes beyond simple grep/glob. Also use when writing custom Cypher queries against the code graph.
 ---
 
 # Synaptiq — Code Intelligence via Knowledge Graph
+
+> Written against **Synaptiq >= 1.0.0**. Several tools documented here
+> (`synaptiq_coupling`, `synaptiq_communities`, `synaptiq_explain`,
+> `synaptiq_review_risk`, `synaptiq_export`) error on older versions —
+> run `/synaptiq:setup` to upgrade if any of them fail.
 
 Synaptiq indexes the codebase into a structural knowledge graph. Every function, class, import, call, type reference, and execution flow is a node or edge you can query. The graph understands relationships that text search cannot — who calls what, what breaks if you change something, which symbols are dead code, and how the architecture clusters into functional communities.
 
@@ -30,6 +35,17 @@ Follow this progression — each step builds context for the next:
 | "What breaks if I change this?" | `synaptiq_impact` |
 | "What code is never called?" | `synaptiq_dead_code` |
 | "Map this diff to affected symbols" | `synaptiq_detect_changes` |
+| "Which files change together?" | `synaptiq_coupling` |
+| "How does A reach B?" | `synaptiq_call_path` |
+| "How is the architecture clustered?" | `synaptiq_communities` |
+| "Explain this symbol's role" | `synaptiq_explain` |
+| "How risky is this PR?" | `synaptiq_review_risk` |
+| "Tell me everything about this file" | `synaptiq_file_context` |
+| "Any circular dependencies?" | `synaptiq_cycles` |
+| "Which tests cover these changes?" | `synaptiq_test_impact` |
+| "Give me full context for this symbol in one shot" | `synaptiq_export` |
+| "Which tool should I use for this question?" | `synaptiq_suggest` |
+| "Persist/retrieve a fact about this codebase" | `synaptiq_remember` / `recall` / `forget` |
 | "Custom graph query" | `synaptiq_cypher` |
 | "What repos are indexed?" | `synaptiq_list_repos` |
 
@@ -50,6 +66,8 @@ Hybrid search (BM25 + vector + fuzzy) across all indexed symbols. Start here whe
 **Parameters:**
 - `query` (string, required) — Natural language or symbol name
 - `limit` (integer, default: 20) — Max results
+- `focus_files` (string[], optional) — Bias results toward symbols graph-near these files (Personalized PageRank)
+- `max_tokens` (integer, optional) — Truncate the response to fit a token budget
 
 **Output format:**
 ```
@@ -69,6 +87,8 @@ Test files are auto-down-ranked, source symbols are boosted. Results include fil
 
 **Parameters:**
 - `symbol` (string, required) — The symbol name as it appears in code
+- `focus_files` (string[], optional) — Sort callers/callees by graph proximity to these files
+- `max_tokens` (integer, optional) — Truncate the response to fit a token budget
 
 **Disambiguation:** When a name is common (e.g., `handler`, `get`, `execute`), `synaptiq_context` may resolve to the wrong symbol — often a File node instead of the Function you want. To avoid this:
 1. Use `synaptiq_query` first to find all symbols with that name
@@ -198,9 +218,73 @@ git diff HEAD~3..HEAD
 
 Note: Changes to string literals, comments, or whitespace outside of symbol definitions will show `(no indexed symbols in changed lines)` — this is correct behavior since no code structure was affected.
 
+### synaptiq_coupling
+
+Temporal coupling from git history — files that change together, with hidden dependencies (co-change without a static import) flagged.
+
+**Parameters:** `file_path` (string, required), `min_strength` (number, default 0.3)
+
+Coupling is symmetric: querying either file of a coupled pair returns the relationship.
+
+### synaptiq_call_path
+
+Shortest call chain between two symbols via BFS.
+
+**Parameters:** `from_symbol` (string, required), `to_symbol` (string, required), `max_depth` (integer, default 10)
+
+Output: `Call path: a → b → c (2 hops)` plus per-step file locations. Use to answer "how does the request handler ever reach this database call?"
+
+### synaptiq_communities
+
+Leiden architectural clusters. Without arguments, lists all communities with cohesion (fraction of each cluster's edges that stay internal, 0–1) and member counts, plus processes that span multiple communities. With `community: "<name>"`, lists that cluster's members.
+
+### synaptiq_explain
+
+Narrative one-symbol summary: role flags (entry point / exported / dead), location, community, top callers/callees, and the execution processes flowing through it. Lighter than `synaptiq_context` when you want orientation rather than the full edge lists.
+
+### synaptiq_review_risk
+
+PR risk score (LOW/MEDIUM/HIGH, 0–10) from a raw git diff. Signals: entry points touched, downstream dependent counts, coupled files NOT in the diff ("usually change together" warnings), and community boundary crossings.
+
+**Parameters:** `diff` (string, required) — raw `git diff` output
+
+### synaptiq_file_context
+
+Everything about one file in a single call: its symbols (with entry-point/exported/dead tags), imports in both directions, top coupled files, and community membership.
+
+**Parameters:** `file_path` (string, required)
+
+### synaptiq_cycles
+
+Circular dependencies via strongly connected components over the call graph. `min_size` (default 2) filters small cycles; groups of 5+ symbols are marked CRITICAL.
+
+### synaptiq_test_impact
+
+Tests likely affected by changes. Accepts either `diff` (raw git diff) or `symbols` (list of names); walks the caller graph up to 4 hops and groups hits into direct (depth ≤ 2) and transitive test coverage.
+
+### synaptiq_export
+
+Graph-aware context packing: one response containing the symbol's source, direct callers and callees (with source), type references, heritage, community, and transitive callers — replaces a series of round-trips when you need full context for a change.
+
+**Parameters:** `symbol` (string, required), `depth` (integer, default 2, max 4), `include_source` (bool, default true), `max_tokens` (integer, optional)
+
+### synaptiq_suggest
+
+Maps a natural-language question to a recommended sequence of Synaptiq tool calls with arguments. Useful when unsure which tool fits.
+
+### synaptiq_remember / synaptiq_recall / synaptiq_forget
+
+Persistent key-value facts about the codebase, stored in `.synaptiq/memory.json` and surviving re-indexing. `remember(key, value, category?)`, `recall(query)` (exact key first, then word-overlap), `forget(key)`. Use for architectural insights worth keeping across sessions.
+
 ### synaptiq_cypher
 
-Execute raw Cypher queries against the knowledge graph (read-only). Write operations (DELETE, DROP, CREATE, SET, MERGE) are rejected.
+Execute raw Cypher queries against the knowledge graph (read-only).
+
+**Read-only enforcement (v1.0.0+):**
+- The query must **start with** `MATCH`, `OPTIONAL MATCH`, `RETURN`, `WITH`, `UNWIND`, or an allow-listed `CALL`.
+- Write/DDL keywords anywhere in the query are rejected: `DELETE`, `DROP`, `CREATE`, `SET`, `MERGE`, `ALTER`, `EXPORT`, `IMPORT`, `ATTACH`, `COPY`, `LOAD`, `INSTALL`, transaction control.
+- `CALL` is only allowed for read-only procedures: `QUERY_FTS_INDEX`, `SHOW_TABLES`, `TABLE_INFO`, `SHOW_CONNECTION`, `CURRENT_SETTING`, `DB_VERSION`.
+- Keywords **inside string literals are fine** — `WHERE n.content CONTAINS 'import React'` is allowed; the guard strips literals before scanning.
 
 **Parameters:**
 - `query` (string, required) — Cypher query
@@ -261,9 +345,11 @@ Note: `Enum` and `Embedding` tables exist in the schema but are typically empty 
 
 All node types share the same property set:
 
-`id`, `name`, `file_path`, `start_line`, `end_line`, `content`, `signature`, `language`, `class_name`, `is_dead`, `is_entry_point`, `is_exported`
+`id`, `name`, `file_path`, `start_line`, `end_line`, `content`, `signature`, `language`, `class_name`, `is_dead`, `is_entry_point`, `is_exported`, `properties_json`
 
-The `id` property uses the format `{label}:{relative_path}:{symbol_name}` (e.g., `function:packages/auth/lib/error-handler.ts:handleAuthError`).
+`properties_json` (v1.0.0+) is a JSON string carrying extra per-label data: community `cohesion`/`symbol_count`, process `step_count`/`kind`, symbol `decorators`/`bases`. Parse it in your head or with a `WHERE c.properties_json CONTAINS ...` filter.
+
+The `id` property uses the format `{label}:{relative_path}:{symbol_name}` (e.g., `function:packages/auth/lib/error-handler.ts:handleAuthError`). Same-named symbols within one file are disambiguated with a `#L{line}` suffix on the symbol name.
 
 ### Relationship Model
 
@@ -395,11 +481,12 @@ MATCH ()-[r]->() RETURN keys(r) AS props LIMIT 1
 
 **"Table X does not exist" in Cypher** — You used a typed relationship pattern like `[r:CALLS]`. KuzuDB stores all relationships in a single `CodeRelation` table. Use `[r]` with `WHERE r.rel_type = 'calls'` instead. See the Cypher Patterns section for working examples.
 
-**Stale results** — The MCP server runs with `--watch` and auto-reindexes on file changes. If results seem stale:
+**Stale results** — The MCP server runs with `--watch` and auto-reindexes on file changes; global analyses (dead code, communities, coupling) refresh on a timer ~30s after edits. If results still seem stale:
 ```bash
-synaptiq analyze .        # Incremental update
+synaptiq analyze .        # Delegates to the running server's reindex
 synaptiq analyze . --full # Full rebuild
 ```
+(While a server is running, `analyze` and the read commands automatically route through its socket — they no longer fail on the database lock.)
 
 **Large impact results** — If `synaptiq_impact` returns too many symbols, reduce `depth` to 1 or 2 to focus on direct callers only.
 

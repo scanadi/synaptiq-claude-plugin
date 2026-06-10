@@ -61,6 +61,7 @@ This will:
 - **Python 3.11+**
 - **Claude Code** with plugin support
 - One of: `uv` (recommended) or `pip`
+- **Synaptiq >= 1.0.0** — `/synaptiq:setup` installs or upgrades it automatically
 
 ## Usage
 
@@ -74,12 +75,23 @@ Once installed, Claude will automatically:
 
 | Tool | Purpose |
 |------|---------|
-| `synaptiq_query` | Search symbols by name or concept |
-| `synaptiq_context` | 360-degree view — callers, callees, types, community |
-| `synaptiq_impact` | Blast radius — all affected symbols |
+| `synaptiq_query` | Search symbols by name or concept (focus-file biasing via PageRank) |
+| `synaptiq_context` | 360-degree view — callers, callees, types, heritage, community |
+| `synaptiq_impact` | Blast radius — all affected symbols, grouped by depth |
 | `synaptiq_dead_code` | Find unreachable code |
 | `synaptiq_detect_changes` | Map git diffs to affected symbols |
-| `synaptiq_cypher` | Raw Cypher queries against the knowledge graph |
+| `synaptiq_coupling` | Files that change together in git history (hidden dependencies) |
+| `synaptiq_call_path` | Shortest call chain between two symbols |
+| `synaptiq_communities` | Leiden architectural clusters and their members |
+| `synaptiq_explain` | Narrative explanation of a symbol's role |
+| `synaptiq_review_risk` | PR risk score from entry points, coupling, and community crossings |
+| `synaptiq_file_context` | Everything about one file: symbols, imports, coupling, dead code |
+| `synaptiq_cycles` | Circular dependencies via strongly connected components |
+| `synaptiq_test_impact` | Tests likely affected by a diff or symbol list |
+| `synaptiq_export` | Graph-aware context packing for a symbol in one response |
+| `synaptiq_suggest` | Recommended tool sequence for a natural-language question |
+| `synaptiq_remember` / `recall` / `forget` | Persist facts about the codebase across sessions |
+| `synaptiq_cypher` | Raw read-only Cypher against the knowledge graph |
 | `synaptiq_list_repos` | List indexed repositories |
 
 ### Example Prompts
@@ -100,7 +112,7 @@ The plugin's session hook ensures Claude reaches for Synaptiq first when asked s
 
 ## Supported Languages
 
-- TypeScript / JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`)
+- TypeScript / JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`)
 - Python (`.py`)
 
 ## License

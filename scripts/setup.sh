@@ -21,11 +21,42 @@ done
 
 echo "=== Synaptiq Setup ==="
 
+# Minimum synaptiq version this plugin is written against. The skill
+# documents tools (coupling, communities, explain, review_risk, export, ...)
+# that only work correctly from 1.0.0 onward.
+MIN_VERSION="1.0.0"
+
+version_lt() {
+  # True when $1 < $2 (semver-ish numeric compare).
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$1" ] \
+    && [ "$1" != "$2" ]
+}
+
+upgrade_synaptiq() {
+  if command -v uv &>/dev/null; then
+    step "Upgrading synaptiq via uv..."
+    uv tool upgrade synaptiq || uv tool install --force synaptiq
+  elif command -v pip &>/dev/null; then
+    step "Upgrading synaptiq via pip..."
+    pip install --upgrade synaptiq
+  else
+    fail "Neither uv nor pip found to upgrade synaptiq."
+    exit 1
+  fi
+}
+
 # Step 1: Check if synaptiq is installed
 step "Checking if synaptiq is installed..."
 if command -v synaptiq &>/dev/null; then
   VERSION=$(synaptiq --version 2>/dev/null || echo "unknown")
   ok "synaptiq found: $VERSION"
+  INSTALLED_NUM=$(echo "$VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+  if [[ -n "$INSTALLED_NUM" ]] && version_lt "$INSTALLED_NUM" "$MIN_VERSION"; then
+    warn "synaptiq $INSTALLED_NUM is older than the $MIN_VERSION this plugin requires."
+    upgrade_synaptiq
+    VERSION=$(synaptiq --version 2>/dev/null || echo "unknown")
+    ok "synaptiq upgraded: $VERSION"
+  fi
 else
   warn "synaptiq is not installed."
   echo ""
