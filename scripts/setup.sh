@@ -15,6 +15,7 @@ fail() { echo -e "${RED}[x]${NC} $1"; }
 ok()   { echo -e "${GREEN}[ok]${NC} $1"; }
 
 FORCE=false
+UPGRADED=false
 for arg in "$@"; do
   [[ "$arg" == "--force" ]] && FORCE=true
 done
@@ -32,13 +33,32 @@ version_lt() {
     && [ "$1" != "$2" ]
 }
 
+current_version_num() {
+  synaptiq --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
+}
+
 upgrade_synaptiq() {
+  local now
   if command -v uv &>/dev/null; then
     step "Upgrading synaptiq via uv..."
-    uv tool upgrade synaptiq || uv tool install --force synaptiq
+    # `uv tool upgrade` honors the version pin recorded in the original
+    # install's receipt and exits 0 without upgrading, so a zero exit code
+    # does not mean a newer version landed — verify, then force past the pin.
+    uv tool upgrade synaptiq || true
+    now=$(current_version_num)
+    if [[ -z "$now" ]] || version_lt "$now" "$MIN_VERSION"; then
+      warn "Still at ${now:-unknown} after 'uv tool upgrade' (pinned install) — forcing reinstall..."
+      uv tool install --force synaptiq
+    fi
   elif command -v pip &>/dev/null; then
     step "Upgrading synaptiq via pip..."
-    pip install --upgrade synaptiq
+    pip install --upgrade synaptiq || true
+    now=$(current_version_num)
+    if [[ -z "$now" ]] || version_lt "$now" "$MIN_VERSION"; then
+      warn "Still at ${now:-unknown} after 'pip install --upgrade' — the 'synaptiq' on PATH"
+      warn "may come from a different installer (uv/pipx). Trying a forced reinstall..."
+      pip install --upgrade --force-reinstall synaptiq || true
+    fi
   else
     fail "Neither uv nor pip found to upgrade synaptiq."
     exit 1
@@ -50,12 +70,19 @@ step "Checking if synaptiq is installed..."
 if command -v synaptiq &>/dev/null; then
   VERSION=$(synaptiq --version 2>/dev/null || echo "unknown")
   ok "synaptiq found: $VERSION"
-  INSTALLED_NUM=$(echo "$VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+  INSTALLED_NUM=$(current_version_num)
   if [[ -n "$INSTALLED_NUM" ]] && version_lt "$INSTALLED_NUM" "$MIN_VERSION"; then
     warn "synaptiq $INSTALLED_NUM is older than the $MIN_VERSION this plugin requires."
     upgrade_synaptiq
-    VERSION=$(synaptiq --version 2>/dev/null || echo "unknown")
-    ok "synaptiq upgraded: $VERSION"
+    INSTALLED_NUM=$(current_version_num)
+    if [[ -z "$INSTALLED_NUM" ]] || version_lt "$INSTALLED_NUM" "$MIN_VERSION"; then
+      fail "synaptiq is still ${INSTALLED_NUM:-unknown} (need >= $MIN_VERSION). Upgrade manually:"
+      echo "  uv tool install --force synaptiq"
+      echo "  pip install --upgrade synaptiq"
+      exit 1
+    fi
+    ok "synaptiq upgraded: $(synaptiq --version 2>/dev/null)"
+    UPGRADED=true
   fi
 else
   warn "synaptiq is not installed."
@@ -103,28 +130,50 @@ else
 fi
 
 # Step 3: Check if synaptiq server is already running (started by MCP)
-SERVER_PID=""
+SERVER_RUNNING=false
 if pgrep -f "synaptiq serve" &>/dev/null; then
-  SERVER_PID=$(pgrep -f "synaptiq serve" | head -1)
+  SERVER_RUNNING=true
 fi
 
+stop_servers() {
+  # There may be several serve processes (one primary plus socket-proxying
+  # secondaries from other Claude Code windows) — stop them all, or stale
+  # daemons keep serving the old code against the old index.
+  warn "Stopping running synaptiq server(s)..."
+  pkill -f "synaptiq serve" 2>/dev/null || true
+  sleep 1
+}
+
+post_kill_notice() {
+  warn "Claude Code does not restart MCP servers mid-session. If Synaptiq tools"
+  warn "error after this, run /mcp -> reconnect synaptiq (or /reload-plugins)."
+}
+
 # Step 4: Index the codebase
-if [[ "$FORCE" == "true" ]]; then
-  step "Force rebuild requested — running full reindex..."
-  if [[ -n "$SERVER_PID" ]]; then
-    warn "Stopping MCP server (PID $SERVER_PID) to release DB lock..."
-    kill "$SERVER_PID" 2>/dev/null || true
-    sleep 1
+if [[ "$UPGRADED" == "true" ]]; then
+  step "Engine upgraded — running full reindex (graph schema may have changed)..."
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
+    stop_servers
   fi
   synaptiq analyze . --full
   ok "Full reindex complete."
-  if [[ -n "$SERVER_PID" ]]; then
-    ok "MCP server will restart automatically on next tool call."
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
+    post_kill_notice
+  fi
+elif [[ "$FORCE" == "true" ]]; then
+  step "Force rebuild requested — running full reindex..."
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
+    stop_servers
+  fi
+  synaptiq analyze . --full
+  ok "Full reindex complete."
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
+    post_kill_notice
   fi
 elif [[ -d ".synaptiq" ]]; then
   step "Checking for existing index..."
   ok "Index found at .synaptiq/"
-  if [[ -n "$SERVER_PID" ]]; then
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
     ok "MCP server is running with --watch (auto-reindexing enabled)"
   else
     echo "  Running incremental update..."
@@ -132,10 +181,8 @@ elif [[ -d ".synaptiq" ]]; then
   fi
 else
   step "No index found. Running initial analysis (this may take a minute)..."
-  if [[ -n "$SERVER_PID" ]]; then
-    warn "Stopping MCP server to run initial index..."
-    kill "$SERVER_PID" 2>/dev/null || true
-    sleep 1
+  if [[ "$SERVER_RUNNING" == "true" ]]; then
+    stop_servers
   fi
   synaptiq analyze .
 fi
