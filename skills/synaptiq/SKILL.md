@@ -238,6 +238,8 @@ Output: `Call path: a → b → c (2 hops)` plus per-step file locations. Use to
 
 Leiden architectural clusters. Without arguments, lists all communities with cohesion (fraction of each cluster's edges that stay internal, 0–1) and member counts, plus processes that span multiple communities. With `community: "<name>"`, lists that cluster's members.
 
+**Parameters:** `community` (string, optional), `max_tokens` (integer, optional — the list-all form can run 10k+ tokens on large repos; pass a budget to truncate)
+
 ### synaptiq_explain
 
 Narrative one-symbol summary: role flags (entry point / exported / dead), location, community, top callers/callees, and the execution processes flowing through it. Lighter than `synaptiq_context` when you want orientation rather than the full edge lists.
@@ -496,6 +498,8 @@ The `synaptiq diff` CLI command does structural branch comparison (not exposed a
 ```bash
 synaptiq diff main..feature-branch
 ```
+
+Default mode parses only the files changed between the refs (seconds even on large monorepos). Node changes are exact; relationship changes cover imports and calls originating in changed files, resolved within the changed-file set. Pass `--full` for the exhaustive dual-graph comparison — cost scales with repo size, only viable on small repos.
 
 Other useful CLI commands:
 ```bash
