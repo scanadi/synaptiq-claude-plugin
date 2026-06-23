@@ -22,11 +22,10 @@ done
 
 echo "=== Synaptiq Setup ==="
 
-# Minimum synaptiq version this plugin is written against. 1.2.1 adds
-# role-aware resource profiles: the serve daemon caps its Kuzu scheduler
-# threads, buffer pool, and embedding threads instead of consuming every
-# core under concurrent agent load.
-MIN_VERSION="1.2.1"
+# Minimum synaptiq version this plugin is written against. 1.5.0 adds
+# Ruby language support (tree-sitter parser, module mixins, Rails-aware
+# dead-code exemptions) alongside Python, TypeScript, and JavaScript.
+MIN_VERSION="1.5.0"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
