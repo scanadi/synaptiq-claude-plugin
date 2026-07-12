@@ -22,10 +22,11 @@ done
 
 echo "=== Synaptiq Setup ==="
 
-# Minimum synaptiq version this plugin is written against. 1.5.0 adds
-# Ruby language support (tree-sitter parser, module mixins, Rails-aware
-# dead-code exemptions) alongside Python, TypeScript, and JavaScript.
-MIN_VERSION="1.5.0"
+# Minimum synaptiq version this plugin is written against. 1.5.1 makes
+# indexing crash-safe and ~12x faster (fixes a silent CSV COPY fallback);
+# 1.5.0 added Ruby language support alongside Python, TypeScript, and
+# JavaScript.
+MIN_VERSION="1.5.1"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
