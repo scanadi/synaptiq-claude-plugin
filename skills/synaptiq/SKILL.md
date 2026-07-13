@@ -5,10 +5,10 @@ description: MUST consult this skill before using any Synaptiq MCP tool (synapti
 
 # Synaptiq — Code Intelligence via Knowledge Graph
 
-> Written against **Synaptiq >= 1.0.0**. Several tools documented here
-> (`synaptiq_coupling`, `synaptiq_communities`, `synaptiq_explain`,
-> `synaptiq_review_risk`, `synaptiq_export`) error on older versions —
-> run `/synaptiq:setup` to upgrade if any of them fail.
+> Written against **Synaptiq >= 2.0.4**. On an older engine, incremental
+> `analyze`, lazy background embeddings, and the freshness trailer
+> described below won't exist — run `/synaptiq:setup` to upgrade if tool
+> responses don't end with an `[index: ...]` trailer.
 
 Synaptiq indexes the codebase into a structural knowledge graph. Every function, class, import, call, type reference, and execution flow is a node or edge you can query. The graph understands relationships that text search cannot — who calls what, what breaks if you change something, which symbols are dead code, and how the architecture clusters into functional communities.
 
@@ -56,6 +56,26 @@ Follow this progression — each step builds context for the next:
 - Finding files by name -> use `Glob`
 
 Synaptiq understands **structure** (call graphs, type references, coupling), not file contents.
+
+## Index Freshness
+
+Every MCP tool response, and the `synaptiq://overview` resource, ends with a compact trailer:
+
+```
+[index: 4m old · embeddings: complete]
+[index: 12s old · embeddings: encoding 12431/26203]
+[index: 2h old · embeddings: stalled]
+[index: age unknown]
+```
+
+Read it before trusting a response:
+
+- **`embeddings: complete`** — semantic/vector search is fully live; treat `synaptiq_query` results as complete.
+- **`embeddings: encoding N/M`** — a background worker is still encoding vectors. Keyword and graph-structural answers (`synaptiq_context`, `synaptiq_impact`, `synaptiq_dead_code`, `synaptiq_cypher`, ...) are already correct; semantic recall from `synaptiq_query` improves as N approaches M.
+- **`embeddings: stalled` / `failed` / `deferred`** — the background worker didn't finish. Tell the user to run `synaptiq analyze` (retries the background path) or `synaptiq analyze --embeddings sync` (blocks until vectors are stored).
+- **`index: <age>`** — time since the last `analyze`. If it's old relative to recent edits in the repo, the graph itself (not just embeddings) may be stale — suggest re-running `synaptiq analyze`.
+
+Omitted when there's no index yet; disabled process-wide via `SYNAPTIQ_MCP_FRESHNESS=0`.
 
 ## MCP Tools Reference
 
@@ -284,7 +304,7 @@ Execute raw Cypher queries against the knowledge graph (read-only).
 
 **Read-only enforcement (v1.0.0+):**
 - The query must **start with** `MATCH`, `OPTIONAL MATCH`, `RETURN`, `WITH`, `UNWIND`, or an allow-listed `CALL`.
-- Write/DDL keywords anywhere in the query are rejected: `DELETE`, `DROP`, `CREATE`, `SET`, `MERGE`, `ALTER`, `EXPORT`, `IMPORT`, `ATTACH`, `COPY`, `LOAD`, `INSTALL`, transaction control.
+- Write/DDL keywords anywhere in the query are rejected: `DELETE`, `DROP`, `CREATE`, `SET`, `REMOVE`, `MERGE`, `DETACH`, `INSTALL`, `LOAD`, `COPY`, `ALTER`, `EXPORT`, `IMPORT`, `ATTACH`, `USE`, and transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`, `CHECKPOINT`).
 - `CALL` is only allowed for read-only procedures: `QUERY_FTS_INDEX`, `SHOW_TABLES`, `TABLE_INFO`, `SHOW_CONNECTION`, `CURRENT_SETTING`, `DB_VERSION`.
 - Keywords **inside string literals are fine** — `WHERE n.content CONTAINS 'import React'` is allowed; the guard strips literals before scanning.
 
@@ -300,7 +320,7 @@ Results (15 rows):
   ...
 ```
 
-**IMPORTANT — KuzuDB Cypher dialect:** The graph backend is KuzuDB, not Neo4j. Key differences:
+**IMPORTANT — LadybugDB Cypher dialect:** The graph backend is LadybugDB, not Neo4j. Key differences:
 - **No typed relationship patterns.** `[r:CALLS]` will fail with "Table CALLS does not exist". All relationships are stored in a single `CodeRelation` table. Filter by `r.rel_type` property instead.
 - **`type(r)` does not exist.** Use `r.rel_type` to get the relationship type.
 - **`labels(n)` works** for node labels but returns empty in some edge contexts.
@@ -339,9 +359,9 @@ Three read-only resources are available for quick reference without querying:
 
 ### Node Labels
 
-`File` | `Folder` | `Function` | `Class` | `Method` | `Interface` | `TypeAlias` | `Community` | `Process`
+`File` | `Folder` | `Function` | `Class` | `Method` | `Interface` | `TypeAlias` | `Enum` | `Module` | `Community` | `Process`
 
-Note: `Enum` and `Embedding` tables exist in the schema but are typically empty in TypeScript codebases.
+`Class` also covers a Go `struct`; `Method` also covers a Go receiver function; `Interface` also covers a Go `interface`; `Module` covers a Ruby `module` or a Go file's `package` clause. `Enum` is typically empty in languages without native enum syntax. `Embedding` is a separate vector-storage table, not a code-symbol label.
 
 ### Node Properties
 
@@ -355,7 +375,7 @@ The `id` property uses the format `{label}:{relative_path}:{symbol_name}` (e.g.,
 
 ### Relationship Model
 
-All relationships are stored in a **single `CodeRelation` table** with a `rel_type` property that indicates the relationship kind. This is a KuzuDB design — there are no separate tables per relationship type.
+All relationships are stored in a **single `CodeRelation` table** with a `rel_type` property that indicates the relationship kind. This is a LadybugDB design — there are no separate tables per relationship type.
 
 **Relationship properties:** `rel_type`, `confidence`, `role`, `step_number`, `strength`, `co_changes`, `symbols`
 
@@ -367,8 +387,9 @@ All relationships are stored in a **single `CodeRelation` table** with a `rel_ty
 | `defines` | File -> Symbol it defines | — |
 | `calls` | Symbol -> Symbol | `confidence` (0.0-1.0) |
 | `imports` | File -> File | `symbols` (list) |
-| `extends` | Class -> Class | — |
-| `implements` | Class -> Interface | — |
+| `extends` | Class -> Class (incl. Go struct/interface embedding) | — |
+| `implements` | Class -> Interface (Python/TS/Ruby only — Go interface satisfaction isn't statically decidable, so no `implements` edges are emitted for Go) | — |
+| `mixes_in` | Class/Module -> Ruby module via `include`/`extend`/`prepend` | — |
 | `uses_type` | Symbol -> Type | `role` (param/return/variable) |
 | `member_of` | Symbol -> Community | — |
 | `step_in_process` | Symbol -> Process | `step_number` |
@@ -389,7 +410,7 @@ Examples:
 
 ## Cypher Patterns
 
-All patterns below have been tested against the actual KuzuDB backend.
+All patterns below have been tested against the actual LadybugDB backend.
 
 ### Files that always change together (coupling)
 ```cypher
@@ -481,9 +502,9 @@ MATCH ()-[r]->() RETURN keys(r) AS props LIMIT 1
 
 **"No upstream callers found"** — The symbol is a leaf node (entry point, route handler, or top-level export). This is expected for things like React components, route loaders, or tRPC procedure handlers that are invoked by the framework rather than called directly by other code.
 
-**"Table X does not exist" in Cypher** — You used a typed relationship pattern like `[r:CALLS]`. KuzuDB stores all relationships in a single `CodeRelation` table. Use `[r]` with `WHERE r.rel_type = 'calls'` instead. See the Cypher Patterns section for working examples.
+**"Table X does not exist" in Cypher** — You used a typed relationship pattern like `[r:CALLS]`. LadybugDB stores all relationships in a single `CodeRelation` table. Use `[r]` with `WHERE r.rel_type = 'calls'` instead. See the Cypher Patterns section for working examples.
 
-**Stale results** — The MCP server runs with `--watch` and auto-reindexes on file changes; global analyses (dead code, communities, coupling) refresh on a timer ~30s after edits. If results still seem stale:
+**Stale results** — Check the freshness trailer at the end of the response first (see "Index Freshness" above); it gives you index age and embedding state directly instead of guessing. The MCP server runs with `--watch` and auto-reindexes on file changes; global analyses (dead code, communities, coupling) refresh on a timer ~30s after edits. If results still seem stale:
 ```bash
 synaptiq analyze .        # Delegates to the running server's reindex
 synaptiq analyze . --full # Full rebuild
@@ -501,12 +522,21 @@ synaptiq diff main..feature-branch
 
 Default mode parses only the files changed between the refs (seconds even on large monorepos). Node changes are exact; relationship changes cover imports and calls originating in changed files, resolved within the changed-file set. Pass `--full` for the exhaustive dual-graph comparison — cost scales with repo size, only viable on small repos.
 
+`synaptiq analyze` is **incremental by default** — a valid manifest plus a small changeset applies a scoped delta in seconds instead of a full rebuild:
+```bash
+synaptiq analyze .                          # incremental (default)
+synaptiq analyze . --full                   # force a full rebuild
+synaptiq analyze . --embeddings lazy        # default: index ready first, vectors encode in the background
+synaptiq analyze . --embeddings sync        # block until vectors are stored (no background "encoding" state)
+synaptiq analyze . --embeddings off         # skip vectors — keyword + fuzzy search only
+synaptiq analyze . --embedding-model fast   # ~180x faster encode, lower recall (needs synaptiq[fast-embeddings])
+synaptiq analyze . --jobs N                 # cap engine/embedding/parser threads to N
+```
+
 Other useful CLI commands:
 ```bash
-synaptiq status           # Show index stats for current repo
+synaptiq status           # Index stats + embedding worker progress for current repo
 synaptiq list             # List all indexed repos
-synaptiq analyze .        # Incremental reindex
-synaptiq analyze . --full # Full rebuild
 synaptiq setup --claude   # Generate MCP config
 ```
 
