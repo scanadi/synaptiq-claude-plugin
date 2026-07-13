@@ -61,7 +61,7 @@ This will:
 - **Python 3.11+**
 - **Claude Code** with plugin support
 - One of: `uv` (recommended) or `pip`
-- **Synaptiq >= 1.5.0** — `/synaptiq:setup` installs or upgrades it automatically
+- **Synaptiq >= 2.0.4** — `/synaptiq:setup` installs or upgrades it automatically
 
 ## Usage
 
@@ -106,16 +106,18 @@ Once installed, Claude will automatically:
 
 ## How It Works
 
-Synaptiq indexes your codebase using tree-sitter AST parsing into a KuzuDB knowledge graph. Every function, class, import, call, and type reference becomes a queryable node or edge. The MCP server exposes this graph to Claude Code.
+Synaptiq indexes your codebase using tree-sitter AST parsing into a LadybugDB knowledge graph. Every function, class, import, call, and type reference becomes a queryable node or edge. The MCP server exposes this graph to Claude Code.
 
-The server runs under a strict resource profile (capped engine threads, 512 MB buffer pool, capped embedding threads) so it stays polite beside your real work even with many agents querying concurrently. Tune via `SYNAPTIQ_KUZU_THREADS`, `SYNAPTIQ_KUZU_MEMORY_MB`, and `SYNAPTIQ_EMBED_THREADS` if needed.
+The server runs under a strict resource profile (capped engine threads, 512 MB buffer pool, capped embedding threads) so it stays polite beside your real work even with many agents querying concurrently. Tune via `SYNAPTIQ_DB_THREADS`, `SYNAPTIQ_DB_MEMORY_MB`, and `SYNAPTIQ_EMBED_THREADS` if needed (the older `SYNAPTIQ_KUZU_THREADS` / `SYNAPTIQ_KUZU_MEMORY_MB` names still work as deprecated aliases for one release).
 
 The plugin's session hook ensures Claude reaches for Synaptiq first when asked structural questions, rather than grepping through files. The skill provides Claude with the full tool reference, Cypher query patterns, and troubleshooting guidance.
 
 ## Supported Languages
 
-- TypeScript / JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`)
 - Python (`.py`)
+- TypeScript / JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`)
+- Ruby (`.rb`, `.rake`, `.gemspec`, `.ru`, `.rbi`, plus suffix-less files like `Rakefile`, `Gemfile`, `Guardfile`, `Capfile`, `Vagrantfile`, `Brewfile`, `Podfile`)
+- Go (`.go`)
 
 ## License
 
