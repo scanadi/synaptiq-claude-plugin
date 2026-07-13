@@ -22,11 +22,13 @@ done
 
 echo "=== Synaptiq Setup ==="
 
-# Minimum synaptiq version this plugin is written against. 1.5.1 makes
-# indexing crash-safe and ~12x faster (fixes a silent CSV COPY fallback);
-# 1.5.0 added Ruby language support alongside Python, TypeScript, and
-# JavaScript.
-MIN_VERSION="2.0.3"
+# Minimum synaptiq version this plugin is written against. 2.0.0 swapped
+# the storage engine for LadybugDB and made `analyze` incremental by
+# default with lazy background embeddings; 2.0.3 made that lazy path
+# lossless (manifest persistence, honest worker progress); 2.0.4 makes
+# `synaptiq status` reconcile embedding state against meta.json instead
+# of trusting a stale sentinel — see the `--embeddings sync` calls below.
+MIN_VERSION="2.0.4"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
@@ -74,6 +76,7 @@ if command -v synaptiq &>/dev/null; then
   INSTALLED_NUM=$(current_version_num)
   if [[ -n "$INSTALLED_NUM" ]] && version_lt "$INSTALLED_NUM" "$MIN_VERSION"; then
     warn "synaptiq $INSTALLED_NUM is older than the $MIN_VERSION this plugin requires."
+    PRE_UPGRADE_VERSION="$INSTALLED_NUM"
     upgrade_synaptiq
     INSTALLED_NUM=$(current_version_num)
     if [[ -z "$INSTALLED_NUM" ]] || version_lt "$INSTALLED_NUM" "$MIN_VERSION"; then
@@ -83,6 +86,9 @@ if command -v synaptiq &>/dev/null; then
       exit 1
     fi
     ok "synaptiq upgraded: $(synaptiq --version 2>/dev/null)"
+    if version_lt "$PRE_UPGRADE_VERSION" "2.0.0"; then
+      warn "Index format changed in 2.0 — the first analyze/open rebuilds once automatically; no action needed."
+    fi
     UPGRADED=true
   fi
 else
@@ -156,7 +162,9 @@ if [[ "$UPGRADED" == "true" ]]; then
   if [[ "$SERVER_RUNNING" == "true" ]]; then
     stop_servers
   fi
-  synaptiq analyze . --full
+  # --embeddings sync: commit vectors inline now, before a reconnecting MCP
+  # server can grab the DB lock and strand a lazy background worker.
+  synaptiq analyze . --full --embeddings sync
   ok "Full reindex complete."
   if [[ "$SERVER_RUNNING" == "true" ]]; then
     post_kill_notice
@@ -166,7 +174,9 @@ elif [[ "$FORCE" == "true" ]]; then
   if [[ "$SERVER_RUNNING" == "true" ]]; then
     stop_servers
   fi
-  synaptiq analyze . --full
+  # --embeddings sync: commit vectors inline now, before a reconnecting MCP
+  # server can grab the DB lock and strand a lazy background worker.
+  synaptiq analyze . --full --embeddings sync
   ok "Full reindex complete."
   if [[ "$SERVER_RUNNING" == "true" ]]; then
     post_kill_notice
