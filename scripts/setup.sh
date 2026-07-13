@@ -26,7 +26,7 @@ echo "=== Synaptiq Setup ==="
 # indexing crash-safe and ~12x faster (fixes a silent CSV COPY fallback);
 # 1.5.0 added Ruby language support alongside Python, TypeScript, and
 # JavaScript.
-MIN_VERSION="1.5.1"
+MIN_VERSION="2.0.2"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
