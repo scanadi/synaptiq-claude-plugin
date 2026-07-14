@@ -5,7 +5,7 @@ description: MUST consult this skill before using any Synaptiq MCP tool (synapti
 
 # Synaptiq — Code Intelligence via Knowledge Graph
 
-> Written against **Synaptiq >= 2.0.4**. On an older engine, incremental
+> Written against **Synaptiq >= 2.0.5**. On an older engine, incremental
 > `analyze`, lazy background embeddings, and the freshness trailer
 > described below won't exist — run `/synaptiq:setup` to upgrade if tool
 > responses don't end with an `[index: ...]` trailer.

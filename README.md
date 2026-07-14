@@ -61,7 +61,7 @@ This will:
 - **Python 3.11+**
 - **Claude Code** with plugin support
 - One of: `uv` (recommended) or `pip`
-- **Synaptiq >= 2.0.4** — `/synaptiq:setup` installs or upgrades it automatically
+- **Synaptiq >= 2.0.5** — `/synaptiq:setup` installs or upgrades it automatically
 
 ## Usage
 

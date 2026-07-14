@@ -27,8 +27,10 @@ echo "=== Synaptiq Setup ==="
 # default with lazy background embeddings; 2.0.3 made that lazy path
 # lossless (manifest persistence, honest worker progress); 2.0.4 makes
 # `synaptiq status` reconcile embedding state against meta.json instead
-# of trusting a stale sentinel — see the `--embeddings sync` calls below.
-MIN_VERSION="2.0.4"
+# of trusting a stale sentinel (see the `--embeddings sync` calls below);
+# 2.0.5 contains native crashes during write-ahead-log replay so a
+# corrupt index self-heals on open instead of aborting.
+MIN_VERSION="2.0.5"
 
 version_lt() {
   # True when $1 < $2 (semver-ish numeric compare).
